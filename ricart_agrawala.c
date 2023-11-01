@@ -15,7 +15,8 @@ int My_Sequence_Number = 0;
 int ReplyCount = 0;
 bool RD[N];
 int Highest_Sequence_Number_Seen = 0;
-
+int request_flag = 0;
+MPI_Request request_req;
 
 void requestCs();
 void releaseCs();
@@ -103,5 +104,8 @@ void resetRD() {
 }
 
 void listenIncomingRequest() {
-    
+    int recv_req;
+    if (!request_flag) {
+        MPI_Irecv()
+    }
 }
