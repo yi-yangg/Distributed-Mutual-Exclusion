@@ -20,6 +20,7 @@ int Highest_Sequence_Number_Seen = 0;
 void requestCs();
 void releaseCs();
 void resetRD();
+void listenIncomingRequest();
 
 int main(int argc, char* argv[]) {
     time_t start_time, current_time;
@@ -32,13 +33,25 @@ int main(int argc, char* argv[]) {
     // 5 iterations
     for (int i = 0; i < 5; i++) {
         if (csInterest) {
+
+            // request critical section from all other processes
             requestCs();
             printf("Process %d is in the critical section", rank);
 
+            // simulate work inside critical section
             time(&start_time);
             while(1) {
-                
+                time(&current_time);
+
+                double elapsed_time = difftime(current_time, start_time);
+                if (elapsed_time >= TIMEOUT) {
+                    break;
+                }
             }
+
+            releaseCs();
+
+
         }
     }
 
@@ -62,17 +75,33 @@ void requestCs() {
 
     MPI_Request req[N-1];
     int req_count = 0;
-
+    int reply_msg;
     // Recv REPLY from all other 
     for (int j = 0; j < N; j++) {
         if (j != rank)
-            MPI_Irecv()
+            MPI_Irecv(&reply_msg, 1, MPI_INT, j, REPLY, MPI_WORLD_COMM, &req[req_count++]);
     }
     
+    int reply_flag = 0;
+    while (1) {
+        MPI_Testall(N-1, req, &reply_flag, MPI_STATUSES_IGNORE);
+
+        if (reply_flag) {
+            break;
+        }
+    }
+}
+
+void releaseCs() {
+
 }
 
 void resetRD() {
     for (int j = 0; j < N; j++) {
         RD[j] = false;
     }
+}
+
+void listenIncomingRequest() {
+    
 }
