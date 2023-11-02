@@ -1,73 +1,64 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <stdbool.h>
-#include <time.h>
+#include <unistd.h>
 
-#define N 4 // no of processes
+#define N 6 // no of processes
 #define REQUEST 0
 #define REPLY 1
-
-#define TIMEOUT 5 // 5 seconds timeout
+#define NONE -1
 
 // Initialize local state for process Pi
 int size, rank, iter_count;
 int My_Sequence_Number = 0;
 int ReplyCount = 0;
 bool RD[N];
+int request_msg[2];
 int Highest_Sequence_Number_Seen = 0;
-int request_flag = 0;
+int request_flag = NONE;
 MPI_Request request_req;
 
 void requestCs();
 void releaseCs();
 void resetRD();
 void listenIncomingRequest(bool isRequesting);
-void max();
+void sendReply(int reply, int dest);
 
 int main(int argc, char* argv[]) {
-    time_t start_time, current_time;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     int csInterest = rank % 2; // odd rank has interest in entering CS
     resetRD();
 
-    // 5 iterations
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 1; i++) {
         if (csInterest) {
 
             // request critical section from all other processes
             requestCs();
             printf("-----------------------------------------------------------------\n");
-            printf("Process %d is in the critical section", rank);
-
+            printf("Process %d is in the critical section\n", rank);
             // simulate work inside critical section
-            time(&start_time);
-            while(true) {
-                time(&current_time);
+            sleep(1);
 
-                double elapsed_time = difftime(current_time, start_time);
-                if (elapsed_time >= TIMEOUT) {
-                    break;
-                }
-            }
-
-            printf("Process %d exiting critical section", rank);
+            printf("Process %d exiting critical section\n", rank);
             printf("-----------------------------------------------------------------\n");
+            fflush(stdout);
             releaseCs();
         }
         else {
             iter_count = 0;
             int max_iter = N / 2; // max number of odd rank processes
-            while (true) {
+            while (iter_count < max_iter) {
                 listenIncomingRequest(false);
-                
             }
         }
+
         
     }
-
     MPI_Finalize();
+
+    return 0;
 }
 
 // Function to invoke mutual exclusion and receive reply from other process
@@ -75,7 +66,8 @@ void requestCs() {
     My_Sequence_Number = Highest_Sequence_Number_Seen + 1;
     
     // Make REQUEST message Ri = {SN, i}
-    int request_msg[2] = {My_Sequence_Number, rank};
+    request_msg[0] = My_Sequence_Number;
+    request_msg[1] = rank;
     printf("Process %d request for critical section\n", rank);
     // Send REQUEST message to all other processes
     for (int j = 0; j < N; j++) {
@@ -92,13 +84,12 @@ void requestCs() {
     // Recv REPLY from all other 
     for (int j = 0; j < N; j++) {
         if (j != rank)
-            MPI_Irecv(&reply_msg, 1, MPI_INT, j, REPLY, MPI_WORLD_COMM, &req[req_count++]);
+            MPI_Irecv(&reply_msg, 1, MPI_INT, j, REPLY, MPI_COMM_WORLD, &req[req_count++]);
     }
-    
     int reply_flag = 0;
     while (true) {
+        listenIncomingRequest(true);
         MPI_Testall(N-1, req, &reply_flag, MPI_STATUSES_IGNORE);
-
         if (reply_flag) {
             break;
         }
@@ -106,7 +97,11 @@ void requestCs() {
 }
 
 void releaseCs() {
-
+    for (int i = 0; i < N; i++) {
+        if(RD[i] && i != rank) {
+            sendReply(0, i);
+        }
+    }
 }
 
 void resetRD() {
@@ -116,22 +111,18 @@ void resetRD() {
 }
 
 void listenIncomingRequest(bool isRequesting) {
-    int recv_req[2];
-    if (!request_flag) {
-        MPI_Irecv(&recv_req, 2, MPI_INT, MPI_ANY_SOURCE, REQUEST, MPI_WORLD_COMM, &recv_req);
+    
+    if (request_flag == NONE) {
+        MPI_Irecv(request_msg, 2, MPI_INT, MPI_ANY_SOURCE, REQUEST, MPI_COMM_WORLD, &request_req);
     }
 
-    MPI_Status status;
-
-    MPI_Test(&recv_req, &request_flag, &status);
-    int Pj_SN = recv_req[0];
-    int Pj_rank = recv_req[1];
-
-    
+    MPI_Test(&request_req, &request_flag, MPI_STATUS_IGNORE);
 
     // if the process currently requesting
     // check priority between Pi and Pj
     if (request_flag) {
+        int Pj_SN = request_msg[0];
+        int Pj_rank = request_msg[1];
         int send_reply = isRequesting;
         if(isRequesting) {
             // if Pi higher priority than Pj
@@ -146,13 +137,15 @@ void listenIncomingRequest(bool isRequesting) {
         }
 
         if (!send_reply) {
-            printf("Process %d sending REPLY to Process %d\n", rank, status.MPI_SOURCE);
-            int temp_reply = 0;
-            MPI_Send(&temp_reply, 1, MPI_INT, status.MPI_SOURCE, REPLY, MPI_COMM_WORLD);
-            request_flag = 0; // reset request_flag to setup another async listener
+            sendReply(0, Pj_rank);
             iter_count++; // only useful for even processes (no interest in cs)
         }
-    }
-    
+        request_flag = NONE; // reset request_flag to setup another async listener
 
+    }
+}
+
+void sendReply(int reply, int dest) {
+    printf("Process %d sending REPLY to Process %d\n", rank, dest);
+    MPI_Send(&reply, 1, MPI_INT, dest, REPLY, MPI_COMM_WORLD);
 }
