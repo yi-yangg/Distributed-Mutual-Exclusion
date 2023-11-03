@@ -15,6 +15,8 @@ int ReplyCount = 0;
 bool RD[N];
 int request_msg[2];
 int Highest_Sequence_Number_Seen = 0;
+
+// Listener variables
 int request_flag = NONE;
 MPI_Request request_req;
 
@@ -25,15 +27,16 @@ void listenIncomingRequest(bool isRequesting);
 void sendReply(int reply, int dest);
 
 int main(int argc, char* argv[]) {
+    // Initialize MPI
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     int csInterest = rank % 2; // odd rank has interest in entering CS
     resetRD();
 
+    // Main loop
     for (int i = 0; i < 1; i++) {
         if (csInterest) {
-
             // request critical section from all other processes
             requestCs();
             printf("-----------------------------------------------------------------\n");
@@ -44,6 +47,7 @@ int main(int argc, char* argv[]) {
             printf("Process %d exiting critical section\n", rank);
             printf("-----------------------------------------------------------------\n");
             fflush(stdout);
+            // release critical section and send REPLY to all deferred processes
             releaseCs();
         }
         else {
@@ -87,6 +91,7 @@ void requestCs() {
             MPI_Irecv(&reply_msg, 1, MPI_INT, j, REPLY, MPI_COMM_WORLD, &req[req_count++]);
     }
     int reply_flag = 0;
+    // Test all async recvs while listening to any REQUEST made by other nodes
     while (true) {
         listenIncomingRequest(true);
         MPI_Testall(N-1, req, &reply_flag, MPI_STATUSES_IGNORE);
@@ -96,7 +101,9 @@ void requestCs() {
     }
 }
 
+// Function to release critical section
 void releaseCs() {
+    // Loop through the RD (Deferred list) and send reply to all deferred processes
     for (int i = 0; i < N; i++) {
         if(RD[i] && i != rank) {
             sendReply(0, i);
@@ -104,21 +111,24 @@ void releaseCs() {
     }
 }
 
+// Function to reset deferred list
 void resetRD() {
     for (int j = 0; j < N; j++) {
         RD[j] = false;
     }
 }
 
+// Function to listen to any incoming request by other processes
 void listenIncomingRequest(bool isRequesting) {
-    
+    // If request_flag is NONE then setup a new async listener
     if (request_flag == NONE) {
         MPI_Irecv(request_msg, 2, MPI_INT, MPI_ANY_SOURCE, REQUEST, MPI_COMM_WORLD, &request_req);
     }
 
+    // Test the async listener
     MPI_Test(&request_req, &request_flag, MPI_STATUS_IGNORE);
 
-    // if the process currently requesting
+    // if REQUEST received
     // check priority between Pi and Pj
     if (request_flag) {
         int Pj_SN = request_msg[0];
@@ -130,7 +140,7 @@ void listenIncomingRequest(bool isRequesting) {
                 RD[Pj_rank] = true;
                 Highest_Sequence_Number_Seen = Pj_SN < Highest_Sequence_Number_Seen ? Highest_Sequence_Number_Seen : Pj_SN;
             }
-
+            // else invoke a send REPLY to the process
             else {
                 send_reply = 0;
             }
@@ -145,6 +155,7 @@ void listenIncomingRequest(bool isRequesting) {
     }
 }
 
+// Function to send a REPLY to the passed in dest
 void sendReply(int reply, int dest) {
     printf("Process %d sending REPLY to Process %d\n", rank, dest);
     MPI_Send(&reply, 1, MPI_INT, dest, REPLY, MPI_COMM_WORLD);
