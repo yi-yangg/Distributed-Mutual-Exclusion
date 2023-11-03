@@ -81,7 +81,7 @@ void requestCs() {
     MPI_Request req[N-1];
     int req_count = 0;
     int reply_msg;
-    // Recv REPLY from all other 
+    // Recv REPLY from all other processes
     for (int j = 0; j < N; j++) {
         if (j != rank)
             MPI_Irecv(&reply_msg, 1, MPI_INT, j, REPLY, MPI_COMM_WORLD, &req[req_count++]);
