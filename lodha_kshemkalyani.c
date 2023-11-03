@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#define N 4
+#define N 6
 #define REQUEST 0
 #define REPLY 1
 #define FLUSH 2
@@ -36,6 +36,8 @@ void InvMutEx();
 void RcvReq(Request req, bool isRequesting);
 void RcvReplyOrFlush(Request req);
 void FinCS();
+bool checkRV();
+bool checkLRQHead();
 bool CheckExecuteCs();
 void resetRV();
 void freeLRQ();
@@ -44,6 +46,7 @@ int getLRQCount(Request req);
 void removeReqFromLRQ(Request req);
 void insertIntoLRQ(Request req);
 void listenIncomingRequest(bool isRequesting);
+int getProcessIndexFromLRQ(int process_id);
 
 int main(int argc, char* argv[]) {
     MPI_Init(&argc, &argv);
@@ -134,15 +137,18 @@ void requestCs() {
         else {
             RcvReplyOrFlush(response_req[i]);
         }
-        int recv_rank = response_req[i].process_id;
-        if (CheckExecuteCs()) {
-            break;
+    }
+
+    if (LRQ[0].process_id != rank) {
+        Request flush_response;
+        int LRQ_index = getProcessIndexFromLRQ(rank);
+        int flush_recv_rank = LRQ[LRQ_index - 1].process_id;
+        if (flush_recv_rank != NONE) {
+            MPI_Recv(&flush_response, 1, requestType, flush_recv_rank, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            printf("Received flush from %d\n", flush_recv_rank);
+            RcvReplyOrFlush(flush_response);
         }
-        else if (LRQ[0].process_id != rank) {
-            MPI_Recv(&response_req[i], 1, requestType, recv_rank, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("Received flush from %d\n", recv_rank);
-            RcvReplyOrFlush(response_req[i]);
-        }
+        
     }
     
 
@@ -214,13 +220,24 @@ void FinCS() {
         }
     }
 }
-bool CheckExecuteCs() {
+
+bool checkRV() {
     for (int i = 0; i < N; i++) {
         if (!RV[i]) {
             return false;
         }
     }
+
+    return true;
+}
+
+bool checkLRQHead() {
     return LRQ[0].process_id == rank;
+}
+
+bool CheckExecuteCs() {
+    
+    return checkRV() && checkLRQHead();
 }
 
 void resetRV() {
@@ -296,4 +313,15 @@ void listenIncomingRequest(bool isRequesting) {
         request_flag = NONE; // reset request_flag to setup another async listener
         iter_count++;
     }
+}
+
+int getProcessIndexFromLRQ(int process_id) {
+
+    for (int i = 0; i < LRQ_size; i++) {
+        if (LRQ[i].process_id == process_id) {
+            return i;
+        }
+    }
+
+    return NONE;
 }
