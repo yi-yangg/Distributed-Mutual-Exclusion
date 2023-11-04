@@ -150,8 +150,8 @@ void requestCs() {
         }
     }
 
-    // If not current process's turn then wait to receive a FLUSH response
-    if (LRQ[0].process_id != rank) {
+    // If not current process's turn then wait to receive a FLUSH response until process allowed to enter CS
+    if (!CheckExecuteCs()) {
         Request flush_response;
         MPI_Recv(&flush_response, 1, requestType, MPI_ANY_SOURCE, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         printf("Received flush from %d\n", flush_response.process_id);
@@ -243,25 +243,14 @@ void FinCS() {
     }
 }
 
-// Function to check if all processes has replied (all 1's)
-bool checkRV() {
+// Function to check all process replies and check the head of LRQ
+bool CheckExecuteCs() {
     for (int i = 0; i < N; i++) {
         if (!RV[i]) {
             return false;
         }
     }
-
-    return true;
-}
-
-// Function to check if the head of LRQ belongs to the process
-bool checkLRQHead() {
     return LRQ[0].process_id == rank;
-}
-
-// Function to check all process replies and check the head of LRQ
-bool CheckExecuteCs() {
-    return checkRV() && checkLRQHead();
 }
 
 // Function to reset the process reply list
