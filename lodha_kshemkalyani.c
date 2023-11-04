@@ -151,7 +151,7 @@ void requestCs() {
     }
 
     // If not current process's turn then wait to receive a FLUSH response until process allowed to enter CS
-    if (!CheckExecuteCs()) {
+    while (!CheckExecuteCs()) {
         Request flush_response;
         MPI_Recv(&flush_response, 1, requestType, MPI_ANY_SOURCE, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         printf("Received flush from %d\n", flush_response.process_id);
