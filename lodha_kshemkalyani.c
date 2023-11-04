@@ -84,6 +84,7 @@ int main(int argc, char* argv[]) {
 
             // Request critical section from all other processes
             requestCs();
+            sleep(1);
             printf("-----------------------------------------------------------------\n");
             printf("Process %d is in the critical section\n", rank);
             // Simulate work inside critical section
@@ -132,7 +133,7 @@ void requestCs() {
 
     // For each of the processes, test the async receive while listening for incoming requests
     for (int i = 0; i < req_count; i++) {
-        // Loop infinitely until async recieve receives a response
+        // Loop infinitely until async receive receives a response
         while (true) {
             MPI_Test(&req[i], &flags[i], &stat[i]);
             listenIncomingRequest(true);
@@ -154,6 +155,7 @@ void requestCs() {
     while (!CheckExecuteCs()) {
         Request flush_response;
         MPI_Recv(&flush_response, 1, requestType, MPI_ANY_SOURCE, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        sleep(1);
         printf("Received flush from %d\n", flush_response.process_id);
         RcvReplyOrFlush(flush_response);
     }
@@ -172,7 +174,7 @@ void InvMutEx() {
     request.sequence_number = My_Sequence_Number;
     request.process_id = rank;
     LRQ_size = 1;
-    // Insert REQUET in LRQ
+    // Insert REQUEST in LRQ
     LRQ = (Request*) malloc(LRQ_size * sizeof(Request));
     LRQ[0] = request;
 

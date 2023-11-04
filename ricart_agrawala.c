@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
         if (csInterest) {
             // request critical section from all other processes
             requestCs();
+            sleep(1);
             printf("-----------------------------------------------------------------\n");
             printf("Process %d is in the critical section\n", rank);
             // simulate work inside critical section
