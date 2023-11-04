@@ -49,7 +49,6 @@ int getLRQCount(Request req);
 void removeReqFromLRQ(Request req);
 void insertIntoLRQ(Request req);
 void listenIncomingRequest(bool isRequesting);
-int getProcessIndexFromLRQ(int process_id);
 
 int main(int argc, char* argv[]) {
     // Initialize MPI
@@ -154,17 +153,9 @@ void requestCs() {
     // If not current process's turn then wait to receive a FLUSH response
     if (LRQ[0].process_id != rank) {
         Request flush_response;
-        // Get index of LRQ for own rank
-        int LRQ_index = getProcessIndexFromLRQ(rank);
-        // Get rank of process from LRQ one before own index
-        int flush_recv_rank = LRQ[LRQ_index - 1].process_id;
-        if (flush_recv_rank != NONE) {
-            // Setup receive to receive flush
-            MPI_Recv(&flush_response, 1, requestType, flush_recv_rank, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("Received flush from %d\n", flush_recv_rank);
-            RcvReplyOrFlush(flush_response);
-        }
-        
+        MPI_Recv(&flush_response, 1, requestType, MPI_ANY_SOURCE, FLUSH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        printf("Received flush from %d\n", flush_response.process_id);
+        RcvReplyOrFlush(flush_response);
     }
     
 
@@ -356,16 +347,4 @@ void listenIncomingRequest(bool isRequesting) {
         request_flag = NONE; // reset request_flag to setup another async listener
         iter_count++; // only useful for even processes (no interest in cs)
     }
-}
-
-// Function to get index from LRQ based on process ID
-int getProcessIndexFromLRQ(int process_id) {
-    // Find LRQ index based on process ID
-    for (int i = 0; i < LRQ_size; i++) {
-        if (LRQ[i].process_id == process_id) {
-            return i;
-        }
-    }
-    // If nothing found, return NONE
-    return NONE;
 }
